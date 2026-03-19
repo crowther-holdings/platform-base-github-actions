@@ -1,0 +1,198 @@
+# Reusable workflow: Build, test, and publish a .NET library as a NuGet package.
+# Caller repositories reference this with:
+#   uses: crowther-holdings/platform-base-github-actions/.github/workflows/build-dotnet-library.yml@main
+
+name: Build .NET Library
+
+on:
+  workflow_call:
+    inputs:
+      buildConfiguration:
+        description: 'Build configuration (Release or Debug)'
+        type: string
+        required: false
+        default: 'Release'
+      codeCoverageThreshold:
+        description: 'Minimum line coverage percentage required'
+        type: number
+        required: false
+        default: 80
+    secrets:
+      GITHUB_TOKEN_PACKAGES:
+        description: 'Token with write:packages permission for pushing NuGet packages'
+        required: true
+
+jobs:
+  build-and-test:
+    name: Build, Test & Package
+    runs-on: ubuntu-22.04
+    outputs:
+      semver: ${{ steps.gitversion.outputs.FullSemVer }}
+      nuget-version: ${{ steps.gitversion.outputs.NuGetVersion }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1. Checkout + GitVersion
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # Full history required for GitVersion
+          persist-credentials: true
+
+      - name: Run GitVersion
+        id: gitversion
+        uses: crowther-holdings/platform-base-github-actions/actions/gitversion@main
+
+      # -----------------------------------------------------------------------
+      # 2. Install .NET 10
+      # -----------------------------------------------------------------------
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
+      # -----------------------------------------------------------------------
+      # 3. Authenticate against GitHub Packages feed
+      # -----------------------------------------------------------------------
+      - name: Authenticate against GitHub Packages
+        run: |
+          dotnet nuget add source \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --name "github" \
+            --username "${{ github.actor }}" \
+            --password "${{ secrets.GITHUB_TOKEN_PACKAGES }}" \
+            --store-password-in-clear-text
+
+      # -----------------------------------------------------------------------
+      # 4. Format check
+      # -----------------------------------------------------------------------
+      - name: Check formatting
+        uses: crowther-holdings/platform-base-github-actions/actions/dotnet-format-check@main
+        with:
+          working-directory: '.'   # optional, defaults to repo root
+
+      # -----------------------------------------------------------------------
+      # 5. Restore (needed before build/test with nobuild)
+      # -----------------------------------------------------------------------
+      - name: Restore dependencies
+        run: dotnet restore **/*.slnx
+
+      # -----------------------------------------------------------------------
+      # 6. Build
+      # -----------------------------------------------------------------------
+      - name: Build
+        run: dotnet build **/*.slnx --configuration ${{ inputs.buildConfiguration }} --no-restore
+
+      # -----------------------------------------------------------------------
+      # 7. Run tests with Coverlet (cobertura + json output)
+      # -----------------------------------------------------------------------
+      - name: Run tests
+        run: |
+          dotnet test **/*.slnx \
+            --configuration ${{ inputs.buildConfiguration }} \
+            --no-build \
+            --logger "console;verbosity=detailed" \
+            --logger "trx;LogFileName=test-results.trx" \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=json%2Ccobertura \
+            /p:ThresholdStat=total \
+            /p:Exclude="[xunit.*]*" \
+            /maxcpucount:1
+
+      # -----------------------------------------------------------------------
+      # 8. Publish test results
+      # -----------------------------------------------------------------------
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: .NET Test Results
+          path: '**/*.trx'
+          reporter: dotnet-trx
+
+      # -----------------------------------------------------------------------
+      # 9. Generate coverage report (HTML + summary)
+      # -----------------------------------------------------------------------
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: '**/*.cobertura.xml'
+          targetdir: '${{ github.workspace }}/CoverageResults'
+          reporttypes: 'HtmlInline;Cobertura;MarkdownSummaryGithub'
+
+      # -----------------------------------------------------------------------
+      # 10. Upload coverage report as downloadable artifact
+      # -----------------------------------------------------------------------
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: '${{ github.workspace }}/CoverageResults'
+          retention-days: 30
+
+      # -----------------------------------------------------------------------
+      # 11. Write coverage summary to job summary page
+      # -----------------------------------------------------------------------
+      - name: Add coverage summary to job
+        run: cat '${{ github.workspace }}/CoverageResults/SummaryGithub.md' >> "$GITHUB_STEP_SUMMARY"
+        if: always()
+
+      # -----------------------------------------------------------------------
+      # 12. Enforce minimum code coverage threshold
+      # -----------------------------------------------------------------------
+      - name: Check coverage threshold
+        uses: crowther-holdings/platform-base-github-actions/actions/check-coverage@main
+        with:
+          cobertura-path: '${{ github.workspace }}/CoverageResults/Cobertura.xml'
+          threshold: ${{ inputs.codeCoverageThreshold }}
+
+      # -----------------------------------------------------------------------
+      # 13. Pack and push NuGet package (PRs = pre-release, main = release)
+      # -----------------------------------------------------------------------
+      - name: Build & push NuGet packages
+        if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+        uses: crowther-holdings/platform-base-github-actions/actions/build-push-nuget@main
+        with:
+          buildConfiguration: ${{ inputs.buildConfiguration }}
+          packageVersion: ${{ steps.gitversion.outputs.NuGetVersion }}
+          packagesToPack: '**/*.slnx'
+          publishFeed: 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
+        secrets:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN_PACKAGES }}
+
+  # ---------------------------------------------------------------------------
+  # 14. Create GitHub Release (main branch only, after successful build)
+  # ---------------------------------------------------------------------------
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-22.04
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && needs.build-and-test.result == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Create Git tag
+        run: |
+          set -e
+          echo "=== Tagging main branch with ${{ needs.build-and-test.outputs.semver }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.build-and-test.outputs.semver }}" --force
+          git push origin --tags --force
+          echo "=== Last 10 tags"
+          git tag --list | sort -V | tail -10
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-and-test.outputs.semver }}
+          name: Release ${{ needs.build-and-test.outputs.semver }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

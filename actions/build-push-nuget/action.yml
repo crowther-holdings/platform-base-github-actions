@@ -1,33 +1,32 @@
 # Composite action: Pack and push NuGet packages to a GitHub Packages feed.
 
-name: 'Build & Push NuGet Packages'
-description: 'Creates NuGet packages via dotnet pack and pushes them to a GitHub Packages feed'
+name: "Build & Push NuGet Packages"
+description: "Creates NuGet packages via dotnet pack and pushes them to a GitHub Packages feed"
 
 inputs:
   buildConfiguration:
-    description: 'Build configuration (e.g. Release)'
+    description: "Build configuration (e.g. Release)"
     required: true
   packageVersion:
-    description: 'Version string to stamp on the packages (from GitVersion)'
+    description: "Version string to stamp on the packages (from GitVersion)"
     required: true
   packagesToPack:
-    description: 'Glob pattern for solution / project files to pack'
-    required: false
-    default: '**/*.slnx'
+    description: "Path to solution or project file to pack"
+    required: true
   publishFeed:
-    description: 'NuGet feed URL to push packages to'
+    description: "NuGet feed URL to push packages to"
     required: false
-    default: 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
+    default: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
   nugetAuthToken:
-    description: 'GitHub token (or PAT) with write:packages permission'
+    description: "GitHub token (or PAT) with write:packages permission"
     required: true
   dotnetNugetPushArgs:
-    description: 'Extra arguments forwarded verbatim to dotnet nuget push'
+    description: "Extra arguments forwarded verbatim to dotnet nuget push"
     required: false
-    default: ''
+    default: ""
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Create NuGet packages
       shell: bash

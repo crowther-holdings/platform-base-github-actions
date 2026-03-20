@@ -174,7 +174,7 @@ jobs:
         with:
           buildConfiguration: ${{ inputs.buildConfiguration }}
           packageVersion: ${{ steps.gitversion.outputs.NuGetVersion }}
-          packagesToPack: "**/*.slnx"
+          packagesToPack: ${{ steps.find-solution.outputs.path }}
           publishFeed: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
           nugetAuthToken: ${{ secrets.GITHUB_TOKEN }}
 

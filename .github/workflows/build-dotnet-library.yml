@@ -28,7 +28,7 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # 1. Checkout + GitVersion
+      # Checkout + GitVersion
       # -----------------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
         uses: crowther-holdings/platform-base-github-actions/actions/gitversion@main
 
       # -----------------------------------------------------------------------
-      # 2. Install .NET 10
+      # Install .NET 10
       # -----------------------------------------------------------------------
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -49,7 +49,7 @@ jobs:
           dotnet-version: "10.x"
 
       # -----------------------------------------------------------------------
-      # 3. Authenticate against GitHub Packages feed
+      # Authenticate against GitHub Packages feed
       # -----------------------------------------------------------------------
       - name: Authenticate against GitHub Packages
         shell: bash
@@ -64,7 +64,7 @@ jobs:
             --store-password-in-clear-text
 
       # -----------------------------------------------------------------------
-      # 4. Format check
+      # Format check
       # -----------------------------------------------------------------------
       - name: Check formatting
         uses: crowther-holdings/platform-base-github-actions/actions/dotnet-format-check@main
@@ -72,35 +72,50 @@ jobs:
           working-directory: "." # optional, defaults to repo root
 
       # -----------------------------------------------------------------------
-      # 5. Restore (needed before build/test with nobuild)
+      # Find Solution File
+      # -----------------------------------------------------------------------
+      - name: Find solution file
+        id: find-solution
+        shell: bash
+        run: |
+          slnx=$(find . -name "*.slnx" | head -1)
+          echo "Found solution: $slnx"
+          echo "path=$slnx" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Restore (needed before build/test with nobuild)
       # -----------------------------------------------------------------------
       - name: Restore dependencies
-        run: dotnet restore **/*.slnx
+        shell: bash
+        run: dotnet restore "${{ steps.find-solution.outputs.path }}"
 
       # -----------------------------------------------------------------------
-      # 6. Build
+      # Build
       # -----------------------------------------------------------------------
       - name: Build
-        run: dotnet build **/*.slnx --configuration ${{ inputs.buildConfiguration }} --no-restore
+        shell: bash
+        run: |
+          dotnet build "${{ steps.find-solution.outputs.path }}" \
+            --configuration ${{ inputs.buildConfiguration }} \
+            --no-restore
 
       # -----------------------------------------------------------------------
-      # 7. Run tests with Coverlet (cobertura + json output)
+      # Run tests with Coverlet (cobertura output)
       # -----------------------------------------------------------------------
       - name: Run tests
+        shell: bash
         run: |
-          dotnet test **/*.slnx \
+          dotnet test "${{ steps.find-solution.outputs.path }}" \
             --configuration ${{ inputs.buildConfiguration }} \
             --no-build \
             --logger "console;verbosity=detailed" \
             --logger "trx;LogFileName=test-results.trx" \
-            /p:CollectCoverage=true \
-            /p:CoverletOutputFormat=json%2Ccobertura \
-            /p:ThresholdStat=total \
-            /p:Exclude="[xunit.*]*" \
+            --collect "XPlat Code Coverage" \
+            --settings coverlet.runsettings \
             /maxcpucount:1
 
       # -----------------------------------------------------------------------
-      # 8. Publish test results
+      # Publish test results
       # -----------------------------------------------------------------------
       - name: Publish test results
         uses: dorny/test-reporter@v1
@@ -111,17 +126,17 @@ jobs:
           reporter: dotnet-trx
 
       # -----------------------------------------------------------------------
-      # 9. Generate coverage report (HTML + summary)
+      # Generate coverage report (HTML + summary)
       # -----------------------------------------------------------------------
       - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@5
         with:
-          reports: "**/*.cobertura.xml"
+          reports: "**/coverage.cobertura.xml"
           targetdir: "${{ github.workspace }}/CoverageResults"
           reporttypes: "HtmlInline;Cobertura;MarkdownSummaryGithub"
 
       # -----------------------------------------------------------------------
-      # 10. Upload coverage report as downloadable artifact
+      # Upload coverage report as downloadable artifact
       # -----------------------------------------------------------------------
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -131,14 +146,14 @@ jobs:
           retention-days: 30
 
       # -----------------------------------------------------------------------
-      # 11. Write coverage summary to job summary page
+      # Write coverage summary to job summary page
       # -----------------------------------------------------------------------
       - name: Add coverage summary to job
         run: cat '${{ github.workspace }}/CoverageResults/SummaryGithub.md' >> "$GITHUB_STEP_SUMMARY"
         if: always()
 
       # -----------------------------------------------------------------------
-      # 12. Enforce minimum code coverage threshold
+      # Enforce minimum code coverage threshold
       # -----------------------------------------------------------------------
       - name: Check coverage threshold
         uses: crowther-holdings/platform-base-github-actions/actions/check-coverage@main
@@ -147,7 +162,7 @@ jobs:
           threshold: ${{ inputs.codeCoverageThreshold }}
 
       # -----------------------------------------------------------------------
-      # 13. Pack and push NuGet package (PRs = pre-release, main = release)
+      # Pack and push NuGet package (PRs = pre-release, main = release)
       # -----------------------------------------------------------------------
       - name: Build & push NuGet packages
         if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
@@ -160,7 +175,7 @@ jobs:
           nugetAuthToken: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # 14. Create GitHub Release (main branch only, after successful build)
+  # Create GitHub Release (main branch only, after successful build)
   # ---------------------------------------------------------------------------
   create-release:
     name: Create GitHub Release

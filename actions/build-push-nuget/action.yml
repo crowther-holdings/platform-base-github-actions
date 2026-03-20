@@ -48,7 +48,7 @@ runs:
         if compgen -G "${{ github.workspace }}/nupkgs/*.nupkg" > /dev/null; then
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "Detected NuGet packages to push:"
-          ls "${{ github.workspace }}/nupkgs/*.nupkg"
+          find "${{ github.workspace }}/nupkgs" -name "*.nupkg"
         else
           echo "found=false" >> "$GITHUB_OUTPUT"
           echo "No NuGet packages found — nothing to push."
@@ -61,8 +61,11 @@ runs:
         NUGET_AUTH_TOKEN: ${{ inputs.nugetAuthToken }}
       run: |
         set -e
-        dotnet nuget push "${{ github.workspace }}/nupkgs/*.nupkg" \
-          --source "${{ inputs.publishFeed }}" \
-          --api-key "${NUGET_AUTH_TOKEN}" \
-          --skip-duplicate \
-          ${{ inputs.dotnetNugetPushArgs }}
+        find "${{ github.workspace }}/nupkgs" -name "*.nupkg" | while read pkg; do
+          echo "Pushing $pkg"
+          dotnet nuget push "$pkg" \
+            --source "${{ inputs.publishFeed }}" \
+            --api-key "${NUGET_AUTH_TOKEN}" \
+            --skip-duplicate \
+            ${{ inputs.dotnetNugetPushArgs }}
+        done

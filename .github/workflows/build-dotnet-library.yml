@@ -22,6 +22,10 @@ jobs:
   build-and-test:
     name: Build, Test & Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     outputs:
       semver: ${{ steps.gitversion.outputs.FullSemVer }}
       nuget-version: ${{ steps.gitversion.outputs.NuGetVersion }}

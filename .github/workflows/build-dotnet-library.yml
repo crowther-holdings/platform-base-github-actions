@@ -158,8 +158,7 @@ jobs:
           packageVersion: ${{ steps.gitversion.outputs.NuGetVersion }}
           packagesToPack: '**/*.slnx'
           publishFeed: 'https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json'
-        secrets:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN_PACKAGES }}
+          nugetAuthToken: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # 14. Create GitHub Release (main branch only, after successful build)

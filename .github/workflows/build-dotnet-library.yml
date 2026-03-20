@@ -17,6 +17,11 @@ on:
         type: number
         required: false
         default: 80
+      actionsTag:
+        description: 'platform-base-github-actions branch/tag to use'
+        type: string
+        required: false
+        default: 'main'
 
 jobs:
   build-and-test:
@@ -33,6 +38,16 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
+      # Checkout Version of Actions
+      # -----------------------------------------------------------------------
+      - name: Checkout platform actions
+        uses: actions/checkout@v4
+        with:
+          repository: crowther-holdings/platform-base-github-actions
+          ref: ${{ inputs.actionsTag }}
+          path: .platform-actions
+
+      # -----------------------------------------------------------------------
       # Checkout + GitVersion
       # -----------------------------------------------------------------------
       - name: Checkout repository
@@ -43,7 +58,7 @@ jobs:
 
       - name: Run GitVersion
         id: gitversion
-        uses: ./actions/gitversion
+        uses: ./.platform-actions/actions/gitversion
 
       # -----------------------------------------------------------------------
       # Install .NET 10
@@ -72,7 +87,7 @@ jobs:
       # Format check
       # -----------------------------------------------------------------------
       - name: Check formatting
-        uses: ./actions/dotnet-format-check
+        uses: ./.platform-actions/actions/dotnet-format-check
         with:
           working-directory: "." # optional, defaults to repo root
 
@@ -171,7 +186,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Build & push NuGet packages
         if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-        uses: ./actions/build-push-nuget
+        uses: ./.platform-actions/actions/build-push-nuget
         with:
           buildConfiguration: ${{ inputs.buildConfiguration }}
           packageVersion: ${{ steps.gitversion.outputs.NuGetVersion }}

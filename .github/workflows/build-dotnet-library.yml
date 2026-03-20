@@ -17,10 +17,6 @@ on:
         type: number
         required: false
         default: 80
-    secrets:
-      GITHUB_TOKEN_PACKAGES:
-        description: 'Token with write:packages permission for pushing NuGet packages'
-        required: true
 
 jobs:
   build-and-test:

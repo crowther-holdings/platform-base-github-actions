@@ -136,8 +136,15 @@ jobs:
         uses: danielpalme/ReportGenerator-GitHub-Action@5
         with:
           reports: "**/coverage.cobertura.xml"
-          targetdir: "${{ github.workspace }}/CoverageResults"
-          reporttypes: "HtmlInline;Cobertura;MarkdownSummaryGithub"
+          targetdir: "coverage-report"
+          reporttypes: "Html;Clover;Cobertura;MarkdownSummaryGithub"
+
+      # -----------------------------------------------------------------------
+      # Write coverage summary to job summary page
+      # -----------------------------------------------------------------------
+      - name: Add coverage summary to job
+        if: always()
+        run: cat 'coverage-report/SummaryGithub.md' >> "$GITHUB_STEP_SUMMARY"
 
       # -----------------------------------------------------------------------
       # Upload coverage report as downloadable artifact
@@ -146,24 +153,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: "${{ github.workspace }}/CoverageResults"
+          path: coverage-report
           retention-days: 30
-
-      # -----------------------------------------------------------------------
-      # Write coverage summary to job summary page
-      # -----------------------------------------------------------------------
-      - name: Add coverage summary to job
-        run: cat '${{ github.workspace }}/CoverageResults/SummaryGithub.md' >> "$GITHUB_STEP_SUMMARY"
-        if: always()
 
       # -----------------------------------------------------------------------
       # Enforce minimum code coverage threshold
       # -----------------------------------------------------------------------
-      - name: Check coverage threshold
-        uses: crowther-holdings/platform-base-github-actions/actions/check-coverage@main
+      - name: Check code coverage
+        uses: themichaelhall/check-code-coverage@v2.0.0
         with:
-          cobertura-path: "${{ github.workspace }}/CoverageResults/Cobertura.xml"
-          threshold: ${{ inputs.codeCoverageThreshold }}
+          report: coverage-report/Clover.xml
+          required-percentage: ${{ inputs.codeCoverageThreshold }}
 
       # -----------------------------------------------------------------------
       # Pack and push NuGet package (PRs = pre-release, main = release)

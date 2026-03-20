@@ -43,7 +43,7 @@ jobs:
 
       - name: Run GitVersion
         id: gitversion
-        uses: crowther-holdings/platform-base-github-actions/actions/gitversion@main
+        uses: ./actions/gitversion
 
       # -----------------------------------------------------------------------
       # Install .NET 10
@@ -72,7 +72,7 @@ jobs:
       # Format check
       # -----------------------------------------------------------------------
       - name: Check formatting
-        uses: crowther-holdings/platform-base-github-actions/actions/dotnet-format-check@main
+        uses: ./actions/dotnet-format-check
         with:
           working-directory: "." # optional, defaults to repo root
 
@@ -171,7 +171,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Build & push NuGet packages
         if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-        uses: crowther-holdings/platform-base-github-actions/actions/build-push-nuget@main
+        uses: ./actions/build-push-nuget
         with:
           buildConfiguration: ${{ inputs.buildConfiguration }}
           packageVersion: ${{ steps.gitversion.outputs.NuGetVersion }}

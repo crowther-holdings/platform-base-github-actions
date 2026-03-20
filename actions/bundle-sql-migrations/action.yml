@@ -1,0 +1,77 @@
+# Composite action: Bundle SQL migrations for deployment.
+# Supports two modes:
+#   1. EF Core migrations bundle (migrationProjectDirectory is set)
+#   2. Raw migrations directory copy (migrationsDirectory is set)
+
+name: 'Bundle SQL Migrations'
+description: 'Bundles EF Core migrations or copies a raw migrations directory and uploads as an artifact'
+
+inputs:
+  migrationProjectDirectory:
+    description: 'Path to the EF Core project to bundle migrations from. Leave empty to skip EF bundling.'
+    required: false
+    default: ''
+  migrationsDirectory:
+    description: 'Path to a raw SQL migrations directory to copy. Leave empty to skip.'
+    required: false
+    default: ''
+  outputDir:
+    description: 'Output directory for migration artifacts'
+    required: false
+    default: './migrations'
+  runAttempt:
+    description: 'The current run attempt number (used to uniquely name the bundle)'
+    required: false
+    default: '1'
+
+runs:
+  using: 'composite'
+  steps:
+    # ── EF Core migration bundle ────────────────────────────────────────────
+    - name: Install Entity Framework tools
+      if: inputs.migrationProjectDirectory != ''
+      shell: bash
+      run: dotnet tool install --global --version "7.*" dotnet-ef
+
+    - name: Bundle EF migrations
+      if: inputs.migrationProjectDirectory != ''
+      shell: bash
+      env:
+        ASPNETCORE_ENVIRONMENT: ci
+      run: |
+        set -e
+        mkdir -p ${{ inputs.outputDir }}
+        dotnet ef migrations bundle \
+          --configuration Release \
+          --self-contained \
+          --output ${{ inputs.outputDir }}/efbundle-${{ inputs.runAttempt }} \
+          --project ${{ inputs.migrationProjectDirectory }} \
+          --verbose \
+          --no-build
+
+    - name: Upload EF migration bundle
+      if: inputs.migrationProjectDirectory != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: sql-migrations
+        path: ${{ inputs.outputDir }}/efbundle-${{ inputs.runAttempt }}
+        retention-days: 30
+        if-no-files-found: warn
+
+    # ── Raw migrations directory ────────────────────────────────────────────
+    - name: Copy raw migrations directory
+      if: inputs.migrationsDirectory != ''
+      shell: bash
+      run: |
+        set -e
+        mkdir -p ${{ inputs.outputDir }}
+        cp ${{ inputs.migrationsDirectory }}/* ${{ inputs.outputDir }}/
+
+    - name: Upload raw migrations
+      if: inputs.migrationsDirectory != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: sql-migrations
+        path: ${{ inputs.outputDir }}
+        retention-days: 30
+        if-no-files-found: warn

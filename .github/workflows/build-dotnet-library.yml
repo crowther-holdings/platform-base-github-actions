@@ -18,10 +18,10 @@ on:
         required: false
         default: 80
       actionsTag:
-        description: 'platform-base-github-actions branch/tag to use'
+        description: "platform-base-github-actions branch/tag to use"
         type: string
         required: false
-        default: 'main'
+        default: "main"
 
 jobs:
   build-and-test:
@@ -38,6 +38,15 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
+      # Checkout Repository
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history required for GitVersion
+          persist-credentials: true
+
+      # -----------------------------------------------------------------------
       # Checkout Version of Actions
       # -----------------------------------------------------------------------
       - name: Checkout platform actions
@@ -47,15 +56,14 @@ jobs:
           ref: ${{ inputs.actionsTag }}
           path: .platform-actions
 
-      # -----------------------------------------------------------------------
-      # Checkout + GitVersion
-      # -----------------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Full history required for GitVersion
-          persist-credentials: true
+      - name: Verify platform actions checkout
+        shell: bash
+        run: |
+          echo "=== platformRef: ${{ inputs.actionsTag }}"
 
+      # -----------------------------------------------------------------------
+      # Git Version
+      # -----------------------------------------------------------------------
       - name: Run GitVersion
         id: gitversion
         uses: ./.platform-actions/actions/gitversion

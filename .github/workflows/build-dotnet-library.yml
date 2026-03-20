@@ -26,6 +26,7 @@ jobs:
       contents: read
       checks: write
       pull-requests: write
+      packages: write
     outputs:
       semver: ${{ steps.gitversion.outputs.FullSemVer }}
       nuget-version: ${{ steps.gitversion.outputs.NuGetVersion }}

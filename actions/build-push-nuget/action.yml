@@ -36,7 +36,6 @@ runs:
         set -e
         dotnet pack ${{ inputs.packagesToPack }} \
           --configuration ${{ inputs.buildConfiguration }} \
-          --no-build \
           --output "${{ github.workspace }}/nupkgs" \
           /p:PackageVersion="${PACKAGE_VERSION}" \
           --verbosity minimal

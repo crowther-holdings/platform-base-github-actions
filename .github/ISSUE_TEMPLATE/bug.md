@@ -2,6 +2,7 @@
 name: Bug
 about: Bug fix
 labels: bug
+type: bug
 ---
 
 ## Background / Context *(Optional)*
